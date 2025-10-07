@@ -1,0 +1,43 @@
+﻿RU = {
+"start_title":"Слёт Джипперов 25–26 октября",
+"start_body":"Закрытое мероприятие: только для владельцев внедорожников и их семей. Чтобы попасть на слёт, пройдите регистрацию и оплатите участие.",
+"btn_register":"Регистрация","btn_info":"Инфо","btn_contact":"Связаться с организатором",
+"choose_lang":"Выберите язык / Tilni tanlang",
+"form_name":"Имя и фамилия:","form_car":"Марка и модель авто (например, Toyota Prado):","form_plate":"Госномер авто:",
+"form_people":"Сколько человек в автомобиле:","form_phone":"Введите номер телефона в формате +998 XX XXX XX XX:",
+"form_photo":"Прикрепите фото вашего автомобиля (или «Пропустить»):","skip":"Пропустить",
+"lodging_title":"План размещения:","lodging_cottage":"Коттедж","lodging_yurt":"Юрта","lodging_tent":"Своя палатка","lodging_none":"Без ночёвки",
+"form_preview":"Проверьте данные и подтвердите отправку:","confirm":"Подтвердить","cancel":"Отмена",
+"fee_body":"Переведите сумму на карту организатора: {card}\\nЗатем прикрепите скрин/фото чека. После проверки придёт подтверждение.",
+"file_prompt":"Загрузите скрин/фото чека:","paid_text":"Чек получен, ожидает проверки администратором.",
+"paid_approved":"✅ Оплата подтверждена! Вы в списке участников. До встречи на слёте!",
+"paid_rejected":"❌ Оплата отклонена. Причина: {reason}. Попробуйте ещё раз.",
+"info_text":"📍Локация: {loc} ({coords})\\n📅Даты: 25–26 октября 2025\\n🏕 Размещение (инфо, без брони):\\n• Коттедж 2-местный — {p2} сум / ночь\\n• Коттедж 3-местный — {p3} сум / ночь\\n• Юрта (до 4 чел.) — {py} сум / ночь",
+"contact_text":"Организатор: {nick}",
+"invalid_phone":"Неверный номер. Пример: +998 90 123 45 67",
+"people_buttons":["1","2","3","4","5"],
+"status_check":"📋 Проверить статус заявки: {status}",
+"send_receipt_btn":"Отправить чек","edit_data_btn":"Изменить данные"
+}
+
+UZ = {
+"start_title":"Jipchilar S’leti 25–26 oktabr",
+"start_body":"Yopiq tadbir: faqat yoʻltanlamas egalariga va ularning oilalariga. S’letga kirish uchun roʻyxatdan oʻting va toʻlovni amalga oshiring.",
+"btn_register":"Ro‘yxatdan o‘tish","btn_info":"Ma’lumot","btn_contact":"Tashkilotchi bilan aloqa",
+"choose_lang":"Tilni tanlang / Выберите язык",
+"form_name":"Ism va familiyangizni kiriting:","form_car":"Avtomobil markasi va modeli (masalan, Toyota Prado):","form_plate":"Davlat raqami:",
+"form_people":"Avtomobilingizda necha kishi bo‘lasiz?","form_phone":"Telefon raqamingizni +998 XX XXX XX XX shaklida yuboring:",
+"form_photo":"Avtomobil rasmini yuboring (yoki «O‘tkazib yuborish»):","skip":"O‘tkazib yuborish",
+"lodging_title":"Joylashuv rejasi:","lodging_cottage":"Kottej","lodging_yurt":"Yurta","lodging_tent":"O‘zimning palatkam","lodging_none":"Tunamayman",
+"form_preview":"Ma’lumotlarni tekshirib, yuborishni tasdiqlang:","confirm":"Tasdiqlash","cancel":"Bekor qilish",
+"fee_body":"To‘lovni tashkilotchining kartasiga yuboring: {card}\\nSo‘ngra chek skrin/fotosini yuklang. Tasdiqlangach, xabar qilinadi.",
+"file_prompt":"Chek skrin/fotosini yuboring:","paid_text":"Chek qabul qilindi, admin tekshiruvini kutmoqda.",
+"paid_approved":"✅ To‘lov tasdiqlandi! Siz ishtirokchilar ro‘yxatidasiz. S’letda ko‘rishguncha!",
+"paid_rejected":"❌ To‘lov rad etildi. Sabab: {reason}.",
+"info_text":"📍Joylashuv: {loc} ({coords})\\n📅Sana: 25–26 oktabr 2025\\n🏕 Joylashuv (ma’lumot, bron qilinmaydi):\\n• 2 o‘rinli kottej — {p2} so‘m / tun\\n• 3 o‘rinli kottej — {p3} so‘m / tun\\n• Yurta (4 kishigacha) — {py} so‘m / tun",
+"contact_text":"Tashkilotchi: {nick}",
+"invalid_phone":"Noto‘g‘ri raqam. Misol: +998 90 123 45 67",
+"people_buttons":["1","2","3","4","5"],
+"status_check":"📋 Holatni tekshirish: {status}",
+"send_receipt_btn":"Chek yuborish","edit_data_btn":"Ma’lumotlarni tahrirlash"
+}
