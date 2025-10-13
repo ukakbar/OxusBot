@@ -13,7 +13,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # ------------------ CONFIG ------------------
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID", "0") or 0)
+ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID"))
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 router = Router()
