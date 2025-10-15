@@ -1,4 +1,5 @@
 
+# -*- coding: utf-8 -*-
 import asyncio
 import os
 import re
@@ -11,45 +12,68 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import (
-    ReplyKeyboardMarkup, KeyboardButton
-)
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 # ================== Config ==================
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")  # optional
-
 DB_PATH = os.getenv("DB_PATH", "registrations.db")
 
-EVENT_TITLE = "Off-Road Slet Aydarkul 2025"
-EVENT_DATES = "25–26 октября 2025"
-EVENT_LOCATION = "Озеро Айдаркуль, Узбекистан"
-EVENT_SITE = "t.me/CarPro_UZ"
+# === Bilingual Welcome Text (RU + UZ) ===
+WELCOME_TEXT = """
+🌍 <b>Слёт Джиперов 2025 / Jeepchilar Slyoti 2025</b>
+📍 <b>Озеро Айдаркуль / Aydarkul ko‘li</b>
+📅 <b>25–26 октября 2025 / 25–26 oktabr 2025</b>
 
-WELCOME_TEXT = f"""
-Добро пожаловать на регистрацию OxusBot!
+Добро пожаловать на участие в <b>оффроуд-фестивале года!</b>
+Xush kelibsiz, bu yilgi eng katta <b>off-road festivali!</b> 🚙🔥
 
-<b>{EVENT_TITLE}</b>
-📅 Даты: {EVENT_DATES}
-📍 Локация: {EVENT_LOCATION}
+🌄 <b>Вас ждёт настоящий праздник для всех любителей внедорожников!</b>
+Bu barcha off-road ixlosmandlari uchun haqiqiy bayram!
+Deyarli butun mamlakatdan klub va ishtirokchilar yig‘iladi —
+birgalikda tabiat bag‘rida ikki kunlik sarguzasht kutmoqda!
 
-Чтобы зарегистрироваться, нажмите <b>«Зарегистрироваться»</b>.
-Вы также можете узнать подробности через кнопку «Инфо».
+🎯 <b>Программа фестиваля / Festival dasturi:</b>
+🏁 Джип-триал / Jip-trial — ochiq musobaqa, har kim qatnasha oladi
+🚘 Джип-спринт / Jip-sprint — faqat tayyorlangan avtomobillar uchun
+🚗 <b>Официальная презентация:</b> Toyota Land Cruiser 300 Hybrid
+🚙 Ko‘rgazma: turli kompaniyalarning yangi avtomobillari
+🎵 Musiqa, 🍢 taomlar, ☕ ichimliklar, 🏕 dam olish zonasi
+🎁 Sovg‘alar va test-drayvlar!
 
-Если хотите, можно прислать все сразу одной строкой:
-<i>Имя, Автомобиль, Телефон, Кол-во человек</i>
-Пример:
-<i>Akbar, Jeep Grand, +998901112233, 3</i>
+Это место, где встречаются энтузиасты,
+делятся опытом, заводят новых друзей
+и просто отлично проводят выходные у Айдаркуля! 💪🌅
+
+Ro‘yxatdan o‘tish uchun — <b>«🚀 Зарегистрироваться / Ro‘yxatdan o‘tish»</b>
+Batafsil ma’lumot — <b>«ℹ️ Инфо / Ma’lumot»</b>
 """
 
-INFO_TEXT = f"""
-<b>{EVENT_TITLE}</b>
-📅 {EVENT_DATES}
-📍 {EVENT_LOCATION}
+INFO_TEXT = """
+🔥 <b>Off-Road Festival "Слёт Джиперов 2025"</b>
 
-Формат: джип-спринт, триал, семейная зона, тест-драйвы.
+📅 25–26 октября 2025
+📍 Озеро Айдаркуль, Узбекистан
+
+Это масштабное off-road событие, где встречаются клубы и энтузиасты со всей страны!
+Вас ждут:
+🏁 Джип-триал — для всех желающих
+🚘 Джип-спринт — для подготовленных машин
+🚗 Презентация нового Toyota Land Cruiser 300 Hybrid
+🎵 Музыка, еда, напитки, подарки, отдых, тест-драйвы!
+
 Оргкоманда: Kay Tourist Services / CarPro_UZ
-Связь: {EVENT_SITE}
+Связь: @UkAkbar  |  @carpro_uz
+"""
+
+LOCATION_TEXT = """
+📍 <b>Локация фестиваля / Festival joyi</b>
+
+Оффроуд «Слёт Джиперов 2025» пройдёт у живописного озера Айдаркуль
+Hudud: O‘zbekiston, Navoiy viloyati, Aydarkul ko‘li atrofida.
+
+👇 Нажмите, чтобы проложить маршрут в Яндекс.Картах:
+👉 <a href="https://yandex.ru/navi?rtext=41.331143,69.272065~40.800573,66.970008&rtt=auto">Открыть маршрут в Яндекс.Навигаторе</a>
 """
 
 # ============== Finite State Machine ==============
@@ -59,25 +83,45 @@ class RegForm(StatesGroup):
     phone = State()
     people = State()
 
+class EditForm(StatesGroup):
+    name = State()
+    car = State()
+    phone = State()
+    people = State()
+
 # ============== Keyboards ==============
 def start_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="🚀 Зарегистрироваться")],
-                  [KeyboardButton(text="ℹ️ Инфо")]],
+        keyboard=[[KeyboardButton(text="🚀 Зарегистрироваться / Ro‘yxatdan o‘tish")],
+                  [KeyboardButton(text="ℹ️ Инфо / Ma’lumot")],
+                  [KeyboardButton(text="📍 Локация / Manzil")]],
         resize_keyboard=True
     )
 
 def cancel_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="❌ Отмена")]],
+        keyboard=[[KeyboardButton(text="❌ Отмена / Bekor qilish")]],
         resize_keyboard=True
     )
+
+def skip_kb() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="➡️ Пропустить / Skip")],
+                  [KeyboardButton(text="❌ Отмена / Bekor qilish")]],
+        resize_keyboard=True
+    )
+
+# Inline buttons for /mydata
+def edit_inline_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        [InlineKeyboardButton(text="✏️ Изменить / Tahrirlash", callback_data="edit_start")]
+    ]])
 
 # ============== DB helpers ==============
 CREATE_SQL = """
 CREATE TABLE IF NOT EXISTS registrations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tg_id INTEGER,
+    tg_id INTEGER UNIQUE,
     name TEXT,
     car TEXT,
     phone TEXT,
@@ -94,32 +138,62 @@ async def init_db():
 async def insert_registration(tg_id: int, name: str, car: str, phone: str, people: int) -> int:
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
-            "INSERT INTO registrations (tg_id, name, car, phone, people, created_at) VALUES (?,?,?,?,?,?)",
-            (tg_id, name.strip(), car.strip(), phone.strip(), int(people), datetime.utcnow().isoformat())
+            "INSERT OR REPLACE INTO registrations (id, tg_id, name, car, phone, people, created_at) "
+            "VALUES ((SELECT id FROM registrations WHERE tg_id=?),?,?,?,?,?,?)",
+            (tg_id, tg_id, name.strip(), car.strip(), phone.strip(), int(people), datetime.utcnow().isoformat())
         )
         await db.commit()
         return cur.lastrowid
 
+async def get_registration(tg_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT id,tg_id,name,car,phone,people,created_at FROM registrations WHERE tg_id=?", (tg_id,)) as cur:
+            row = await cur.fetchone()
+            return row
+
+async def update_registration(tg_id: int, name: str = None, car: str = None, phone: str = None, people: int = None):
+    async with aiosqlite.connect(DB_PATH) as db:
+        fields, params = [], []
+        if name is not None:
+            fields.append("name=?")
+            params.append(name.strip())
+        if car is not None:
+            fields.append("car=?")
+            params.append(car.strip())
+        if phone is not None:
+            fields.append("phone=?")
+            params.append(phone.strip())
+        if people is not None:
+            fields.append("people=?")
+            params.append(int(people))
+        if not fields:
+            return
+        params.append(tg_id)
+        await db.execute(f"UPDATE registrations SET {', '.join(fields)} WHERE tg_id=?", params)
+        await db.commit()
+
 # ============== Validation ==============
 def parse_inline(text: str):
+    # Expected: name, "car", phone, people
     parts = [p.strip() for p in text.split(",")]
     if len(parts) != 4:
         return None
     name, car, phone, people = parts
     if not name or not car:
         return None
-    if not re.fullmatch(r"[+0-9)( -]{7,20}", phone):
+    if not re.fullmatch(r"[+0-9)( -]{7,20}", phone or ""):
         return None
     digits = re.sub(r"[^0-9]", "", people or "")
     if not digits:
         return None
     ppl = int(digits)
-    if ppl <= 0 or ppl > 50:
+    if not (1 <= ppl <= 50):
         return None
+    car = car.strip('"“”'` ')
     return name, car, phone, ppl
 
 def phone_valid(phone: str) -> bool:
-    return re.fullmatch(r"[+0-9)( -]{7,20}", phone) is not None
+    return re.fullmatch(r"[+0-9)( -]{7,20}", phone or "") is not None
 
 def people_valid(p: str):
     digits = re.sub(r"[^0-9]", "", p or "")
@@ -136,47 +210,68 @@ async def cmd_start(m: types.Message, state: FSMContext):
     await state.clear()
     await m.answer(WELCOME_TEXT, parse_mode=ParseMode.HTML, reply_markup=start_kb())
 
-@router.message(F.text == "ℹ️ Инфо")
+@router.message(F.text == "ℹ️ Инфо / Ma’lumot")
 async def info(m: types.Message):
     await m.answer(INFO_TEXT, parse_mode=ParseMode.HTML)
 
-@router.message(F.text == "🚀 Зарегистрироваться")
+@router.message(F.text == "📍 Локация / Manzil")
+async def location(m: types.Message):
+    await m.answer(LOCATION_TEXT, parse_mode=ParseMode.HTML, disable_web_page_preview=False)
+
+@router.message(F.text == "🚀 Зарегистрироваться / Ro‘yxatdan o‘tish")
 async def reg_begin(m: types.Message, state: FSMContext):
     await state.set_state(RegForm.name)
-    await m.answer("Как Вас зовут? (Имя и, при желании, фамилия)", reply_markup=cancel_kb())
+    await m.answer(
+        "😎 Начнём регистрацию!\n"
+        "RU: Укажите, пожалуйста, ваше имя и фамилию.\n"
+        "UZ: Iltimos, ism va familiyangizni yozing.",
+        reply_markup=cancel_kb()
+    )
 
 @router.message(RegForm.name)
 async def reg_name(m: types.Message, state: FSMContext):
-    name = m.text.strip()
+    name = (m.text or "").strip()
     if len(name) < 2:
-        return await m.answer("Пожалуйста, укажите имя корректно.")
+        return await m.answer("RU: Пожалуйста, введите корректное имя.\nUZ: Iltimos, ismingizni to‘g‘ri kiriting.")
     await state.update_data(name=name)
     await state.set_state(RegForm.car)
-    await m.answer("Какой автомобиль? (Марка и модель)")
+    await m.answer(
+        "👍 Отлично, {0}!\n"
+        "RU: Теперь напишите, какой у вас автомобиль (марка и модель).\n"
+        "UZ: Endi avtomobilingizni yozing (brend va model).".format(name)
+    )
 
 @router.message(RegForm.car)
 async def reg_car(m: types.Message, state: FSMContext):
-    car = m.text.strip()
+    car = (m.text or "").strip().strip('\"“”\'` ')
     if len(car) < 2:
-        return await m.answer("Пожалуйста, укажите автомобиль корректно.")
+        return await m.answer('RU: Укажите корректно марку и модель.\nUZ: Brend va modelni to‘g‘ri yozing.')
     await state.update_data(car=car)
     await state.set_state(RegForm.phone)
-    await m.answer("Ваш телефон (например +998901112233):")
+    await m.answer(
+        "📱 Отлично!\n"
+        "RU: Укажите ваш номер телефона (формат: +998...).\n"
+        "UZ: Telefon raqamingizni yozing (+998 bilan)."
+    )
 
 @router.message(RegForm.phone)
 async def reg_phone(m: types.Message, state: FSMContext):
-    phone = m.text.strip()
+    phone = (m.text or "").strip()
     if not phone_valid(phone):
-        return await m.answer("Похоже, номер некорректен. Пример: +998901112233. Отправьте номер ещё раз.")
+        return await m.answer("RU: Кажется, номер некорректный. Отправьте ещё раз.\nUZ: Raqam noto‘g‘ri ko‘rinadi. Qayta yuboring.")
     await state.update_data(phone=phone)
     await state.set_state(RegForm.people)
-    await m.answer("Сколько человек в экипаже? (число)")
+    await m.answer(
+        "👥 Принято!\n"
+        "RU: Сколько человек будет в вашем автомобиле (включая водителя)? Напишите только число.\n"
+        "UZ: Ekipajda (haydovchini qo‘shib) nechta odam? Faqat raqam yozing."
+    )
 
 @router.message(RegForm.people)
 async def reg_people(m: types.Message, state: FSMContext):
-    n = people_valid(m.text)
+    n = people_valid(m.text or "")
     if n is None:
-        return await m.answer("Укажите, пожалуйста, число от 1 до 50.")
+        return await m.answer("RU: Укажите число от 1 до 50.\nUZ: 1 dan 50 gacha bo‘lgan son kiriting.")
     data = await state.get_data()
     reg_id = await insert_registration(
         tg_id=m.from_user.id,
@@ -185,41 +280,190 @@ async def reg_people(m: types.Message, state: FSMContext):
         phone=data["phone"],
         people=n
     )
+    text = (
+        "✅ <b>Регистрация успешна! / Ro‘yxatdan o‘tish muvaffaqiyatli!</b>\n"
+        f"ID: <b>{reg_id}</b>\n\n"
+        f"👤 {data['name']}\n"
+        f"🚙 {data['car']}\n"
+        f"📞 {data['phone']}\n"
+        f"👥 {n}"
+    )
+    await m.answer(text, parse_mode=ParseMode.HTML, reply_markup=start_kb())
+    accom = (
+        "\n\n<b>🏡 Проживание / Turar joy (ixtiyoriy):</b>\n"
+        "🏠 Коттедж 2-местный — 1 500 000 сум\n"
+        "🏡 Коттедж 3-местный — 2 000 000 сум\n"
+        "⛺ Юрта (3+ человек) — 800 000 сум\n"
+        "Bron qilish / Бронь: shaxsiy xabar — <b>@UkAkbar</b>"
+    )
+    await m.answer(accom, parse_mode=ParseMode.HTML)
+    await state.clear()
+
+# --------- /mydata and editing ---------
+@router.message(Command("mydata"))
+async def cmd_mydata(m: types.Message):
+    row = await get_registration(m.from_user.id)
+    if not row:
+        return await m.answer("У вас пока нет регистрации. Нажмите «🚀 Зарегистрироваться / Ro‘yxatdan o‘tish».", reply_markup=start_kb())
+    _id, tg_id, name, car, phone, people, created_at = row
+    text = (
+        "🗂 <b>Ваши данные / Ma'lumotlaringiz</b>\n\n"
+        f"👤 {name}\n"
+        f"🚙 {car}\n"
+        f"📞 {phone}\n"
+        f"👥 {people}\n"
+        f"🕒 {created_at} UTC"
+    )
+    await m.answer(text, parse_mode=ParseMode.HTML, reply_markup=start_kb())
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Изменить / Tahrirlash", callback_data="edit_start")]])
+    await m.answer("Если нужно — можно обновить данные.", reply_markup=kb)
+
+@router.message(Command("edit"))
+async def cmd_edit(m: types.Message, state: FSMContext):
+    row = await get_registration(m.from_user.id)
+    if not row:
+        return await m.answer("Регистрация не найдена. Сначала нажмите «🚀 Зарегистрироваться / Ro‘yxatdan o‘tish».", reply_markup=start_kb())
+    _id, tg_id, name, car, phone, people, created_at = row
+    await state.update_data(name=name, car=car, phone=phone, people=people)
+    await state.set_state(EditForm.name)
+    await m.answer(
+        f"✏️ Обновим данные.\n"
+        f"Текущее имя: <b>{name}</b>\n"
+        "RU: Отправьте новое имя и фамилию или нажмите «➡️ Пропустить / Skip».\n"
+        "UZ: Yangi ism-familyani yuboring yoki «➡️ Пропустить / Skip» tugmasini bosing.",
+        parse_mode=ParseMode.HTML,
+        reply_markup=skip_kb()
+    )
+
+@router.callback_query(F.data == "edit_start")
+async def cb_edit_start(c: types.CallbackQuery, state: FSMContext):
+    row = await get_registration(c.from_user.id)
+    if not row:
+        return await c.message.answer("Регистрация не найдена. Сначала нажмите «🚀 Зарегистрироваться / Ro‘yxatdan o‘tish».", reply_markup=start_kb())
+    _id, tg_id, name, car, phone, people, created_at = row
+    await state.update_data(name=name, car=car, phone=phone, people=people)
+    await state.set_state(EditForm.name)
+    await c.message.answer(
+        f"✏️ Обновим данные.\n"
+        f"Текущее имя: <b>{name}</b>\n"
+        "RU: Отправьте новое имя и фамилию или нажмите «➡️ Пропустить / Skip».\n"
+        "UZ: Yangi ism-familyani yuboring yoki «➡️ Пропустить / Skip» tugmasini bosing.",
+        parse_mode=ParseMode.HTML,
+        reply_markup=skip_kb()
+    )
+    await c.answer()
+
+@router.message(EditForm.name)
+async def edit_name(m: types.Message, state: FSMContext):
+    if m.text.strip().lower().startswith(("➡️", "пропустить", "skip")):
+        # keep old
+        pass
+    else:
+        if len(m.text.strip()) < 2:
+            return await m.answer("RU: Пожалуйста, введите корректное имя.\nUZ: Iltimos, ismingizni to‘g‘ri kiriting.")
+        await state.update_data(name=m.text.strip())
+    data = await state.get_data()
+    await state.set_state(EditForm.car)
+    await m.answer(
+        f"Текущий автомобиль: <b>{data['car']}</b>\n"
+        "RU: Отправьте новую марку и модель или «➡️ Пропустить / Skip».\n"
+        "UZ: Yangi brend va modelni yuboring yoki «➡️ Пропустить / Skip».",
+        parse_mode=ParseMode.HTML,
+        reply_markup=skip_kb()
+    )
+
+@router.message(EditForm.car)
+async def edit_car(m: types.Message, state: FSMContext):
+    if m.text.strip().lower().startswith(("➡️", "пропустить", "skip")):
+        pass
+    else:
+        car = m.text.strip().strip('\"“”\'` ')
+        if len(car) < 2:
+            return await m.answer('RU: Укажите корректно марку и модель.\nUZ: Brend va modelni to‘g‘ri yozing.')
+        await state.update_data(car=car)
+    data = await state.get_data()
+    await state.set_state(EditForm.phone)
+    await m.answer(
+        f"Текущий телефон: <b>{data['phone']}</b>\n"
+        "RU: Отправьте новый номер телефона или «➡️ Пропустить / Skip».\n"
+        "UZ: Yangi telefon raqamini yuboring yoki «➡️ Пропустить / Skip».",
+        parse_mode=ParseMode.HTML,
+        reply_markup=skip_kb()
+    )
+
+@router.message(EditForm.phone)
+async def edit_phone(m: types.Message, state: FSMContext):
+    if m.text.strip().lower().startswith(("➡️", "пропустить", "skip")):
+        pass
+    else:
+        phone = m.text.strip()
+        if not phone_valid(phone):
+            return await m.answer("RU: Кажется, номер некорректный. Отправьте ещё раз.\nUZ: Raqam noto‘g‘ri ko‘rinadi. Qayta yuboring.")
+        await state.update_data(phone=phone)
+    data = await state.get_data()
+    await state.set_state(EditForm.people)
+    await m.answer(
+        f"Текущее кол-во: <b>{data['people']}</b>\n"
+        "RU: Отправьте новое число (1–50) или «➡️ Пропустить / Skip».\n"
+        "UZ: Yangi sonni yuboring (1–50) yoki «➡️ Пропустить / Skip».",
+        parse_mode=ParseMode.HTML,
+        reply_markup=skip_kb()
+    )
+
+@router.message(EditForm.people)
+async def edit_people(m: types.Message, state: FSMContext):
+    if m.text.strip().lower().startswith(("➡️", "пропустить", "skip")):
+        pass
+    else:
+        n = people_valid(m.text or "")
+        if n is None:
+            return await m.answer("RU: Укажите число от 1 до 50.\nUZ: 1 dan 50 gacha bo‘lgan son kiriting.")
+        await state.update_data(people=n)
+    data = await state.get_data()
+    # persist
+    await update_registration(
+        tg_id=m.from_user.id,
+        name=data.get("name"),
+        car=data.get("car"),
+        phone=data.get("phone"),
+        people=data.get("people")
+    )
     await state.clear()
     text = (
-        "✅ <b>Регистрация успешна!</b>\n"
-        f"Ваш ID: <b>{reg_id}</b>\n\n"
-        f"👤 <b>{data['name']}</b>\n"
-        f"🚙 <b>{data['car']}</b>\n"
+        "✅ Данные обновлены! / Ma'lumotlar yangilandi!\n\n"
+        f"👤 {data['name']}\n"
+        f"🚙 {data['car']}\n"
         f"📞 {data['phone']}\n"
-        f"👥 Кол-во человек: <b>{n}</b>"
+        f"👥 {data['people']}"
     )
     await m.answer(text, parse_mode=ParseMode.HTML, reply_markup=start_kb())
 
 # --------- Fallback: inline one-line message ---------
+def format_reg_text(reg_id, name, car, phone, ppl):
+    return (
+        "✅ <b>Регистрация успешна! / Ro‘yxatdan o‘tish muvaffaqiyatli!</b>\n"
+        f"ID: <b>{reg_id}</b>\n\n"
+        f"👤 {name}\n"
+        f"🚙 {car}\n"
+        f"📞 {phone}\n"
+        f"👥 {ppl}"
+    )
+
 @router.message()
 async def fallback_inline(m: types.Message, state: FSMContext):
     parsed = parse_inline(m.text or "")
     if not parsed:
         return await m.answer(
-            "Чтобы зарегистрироваться, нажмите «Зарегистрироваться» или отправьте данные одной строкой:\n"
-            "<i>Имя, Автомобиль, Телефон, Кол-во человек</i>",
+            "RU: Нажмите «Зарегистрироваться» или отправьте в формате: <i>Имя, \"Авто\", Телефон, Кол-во</i>\n"
+            "UZ: «Ro‘yxatdan o‘tish» tugmasini bosing yoki mana bunday yuboring: <i>Ism, \"Avto\", Telefon, Son</i>",
             parse_mode=ParseMode.HTML,
             reply_markup=start_kb()
         )
     name, car, phone, ppl = parsed
     reg_id = await insert_registration(m.from_user.id, name, car, phone, ppl)
-    text = (
-        "✅ <b>Регистрация успешна!</b>\n"
-        f"Ваш ID: <b>{reg_id}</b>\n\n"
-        f"👤 <b>{name}</b>\n"
-        f"🚙 <b>{car}</b>\n"
-        f"📞 {phone}\n"
-        f"👥 Кол-во человек: <b>{ppl}</b>"
-    )
-    await m.answer(text, parse_mode=ParseMode.HTML, reply_markup=start_kb())
+    await m.answer(format_reg_text(reg_id, name, car, phone, ppl), parse_mode=ParseMode.HTML, reply_markup=start_kb())
 
-# ============== Admin section ==============
+# ============== Admin section (export/count) ==============
 admin_router = Router()
 
 def is_admin(user_id: int) -> bool:
