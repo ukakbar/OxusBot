@@ -19,6 +19,13 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")  # optional
 DB_PATH = os.getenv("DB_PATH", "registrations.db")
 
+# === Helpers to avoid Unicode-quote issues ===
+QUOTES = " '\"`“”„‟‹›«»"
+
+def clean_car(text: str) -> str:
+    # strip spaces + ASCII quotes + common Unicode quotes
+    return (text or "").strip().strip(QUOTES)
+
 # === Bilingual Welcome Text (RU + UZ) ===
 WELCOME_TEXT = """
 🌍 <b>Слёт Джиперов 2025 / Jeepchilar Slyoti 2025</b>
@@ -35,7 +42,7 @@ birgalikda tabiat bag‘rida ikki kunlik sarguzasht kutmoqda!
 
 🎯 <b>Программа фестиваля / Festival dasturi:</b>
 🏁 Джип-триал / Jip-trial — ochiq musobaqa, har kim qatnasha oladi
-🚘 Джип-спринт / Jip-sprint — faqat tayyorlangan avtomобillar uchun
+🚘 Джип-спринт / Jip-sprint — faqat tayyorlangan avtomobillar uchun
 🚗 <b>Официальная презентация:</b> Toyota Land Cruiser 300 Hybrid
 🚙 Ko‘rgazma: turli kompaniyalarning yangi avtomobillari
 🎵 Musiqa, 🍢 taomlar, ☕ ichimliklar, 🏕 dam olish zonasi
@@ -177,8 +184,7 @@ def parse_inline(text: str):
     ppl = int(digits)
     if not (1 <= ppl <= 50):
         return None
-    # SAFELY strip quotes/spaces around car
-    car = car.strip(" '"`“”")
+    car = clean_car(car)
     return name, car, phone, ppl
 
 def phone_valid(phone: str) -> bool:
@@ -232,8 +238,7 @@ async def reg_name(m: types.Message, state: FSMContext):
 
 @router.message(RegForm.car)
 async def reg_car(m: types.Message, state: FSMContext):
-    car = (m.text or "").strip()
-    car = car.strip(" '"`“”")  # FIXED: safe strip of quotes/spaces
+    car = clean_car(m.text)
     if len(car) < 2:
         return await m.answer('RU: Укажите корректно марку и модель.\nUZ: Brend va modelni to‘g‘ri yozing.')
     await state.update_data(car=car)
@@ -308,12 +313,6 @@ async def cmd_mydata(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Изменить / Tahrirlash", callback_data="edit_start")]])
     await m.answer("Если нужно — можно обновить данные.", reply_markup=kb)
 
-class EditForm(StatesGroup):
-    name = State()
-    car = State()
-    phone = State()
-    people = State()
-
 @router.message(Command("edit"))
 async def cmd_edit(m: types.Message, state: FSMContext):
     row = await get_registration(m.from_user.id)
@@ -374,7 +373,7 @@ async def edit_car(m: types.Message, state: FSMContext):
     if txt.lower().startswith(("➡️", "пропустить", "skip")):
         pass
     else:
-        car = txt.strip(" '"`“”")
+        car = clean_car(txt)
         if len(car) < 2:
             return await m.answer('RU: Укажите корректно марку и модель.\nUZ: Brend va modelni to‘g‘ri yozing.')
         await state.update_data(car=car)
