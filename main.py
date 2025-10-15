@@ -36,7 +36,7 @@ WELCOME_TEXT = """
 📅 <b>25–26 октября 2025 / 25–26 oktabr 2025</b>
 
 Добро пожаловать на участие в <b>оффроуд-фестивале года!</b>
-Xush kelibsiz, bu yilgi eng katta <b>off-road festivali!</b> 🚙🔥
+Xush kelibsiz, bu yilgi eng katta <b>off-road festivaliga!</b> 🚙🔥
 
 🌄 <b>Вас ждёт настоящий праздник для всех любителей внедорожников!</b>
 Bu barcha off-road ixlosmandlari uchun haqiqiy bayram!
@@ -47,9 +47,9 @@ birgalikda tabiat bag‘rida ikki kunlik sarguzasht kutmoqda!
 🏁 Джип-триал / Jip-trial — ochiq musobaqa, har kim qatnasha oladi
 🚘 Джип-спринт / Jip-sprint — faqat tayyorlangan avtomobillar uchun
 🚗 <b>Официальная презентация:</b> Toyota Land Cruiser 300 Hybrid
-🚙 Ko‘rgazma: turli kompaniyalarning yangi avtomobillari
+🚙 Festivalda: turli kompaniyalarning yangi avtomobillari
 🎵 Musiqa, 🍢 taomlar, ☕ ichimliklar, 🏕 dam olish zonasi
-🎁 Sovg‘alar va test-drayvlar!
+🎁 Sovg‘alar va test-drayvlar ktumoqda!
 
 Это место, где встречаются энтузиасты,
 делятся опытом, заводят новых друзей
@@ -462,6 +462,46 @@ async def cmd_export(m: types.Message):
     await m.answer_document(types.BufferedInputFile(
         output.getvalue().encode("utf-8"), filename=f"registrations_{datetime.utcnow().date()}.csv"
     ))
+# ------------------ /exportxlsx (Excel .xlsx) ------------------
+from io import BytesIO
+from openpyxl import Workbook
+
+@admin_router.message(Command("exportxlsx"))
+async def cmd_exportxlsx(m: types.Message):
+    if not is_admin(m.from_user.id):
+        return await m.answer("У вас нет доступа к этой команде.")
+
+    # читаем данные
+    rows = []
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, name, car, phone, people, created_at FROM registrations ORDER BY id"
+        ) as cur:
+            async for r in cur:
+                rows.append(r)
+
+    # собираем Excel
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Registrations"
+    ws.append(["ID", "Имя", "Автомобиль", "Телефон", "Кол-во человек", "Дата регистрации (UTC)"])
+
+    for rid, name, car, phone, people, created_at in rows:
+        ws.append([rid, name, car, phone, people, created_at])
+
+    # автоширина
+    for col in ws.columns:
+        width = max(len(str(c.value)) if c.value is not None else 0 for c in col)
+        ws.column_dimensions[col[0].column_letter].width = min(width + 2, 40)
+
+    # отправка файла
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    await m.answer_document(
+        types.BufferedInputFile(buf.getvalue(), filename=f"registrations_{datetime.utcnow().date()}.xlsx"),
+        caption="Экспорт регистраций (Excel)"
+    )
 
 @admin_router.message(Command("count"))
 async def cmd_count(m: types.Message):
