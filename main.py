@@ -35,7 +35,7 @@ birgalikda tabiat bag‘rida ikki kunlik sarguzasht kutmoqda!
 
 🎯 <b>Программа фестиваля / Festival dasturi:</b>
 🏁 Джип-триал / Jip-trial — ochiq musobaqa, har kim qatnasha oladi
-🚘 Джип-спринт / Jip-sprint — faqat tayyorlangan avtomobillar uchun
+🚘 Джип-спринт / Jip-sprint — faqat tayyorlangan avtomобillar uchun
 🚗 <b>Официальная презентация:</b> Toyota Land Cruiser 300 Hybrid
 🚙 Ko‘rgazma: turli kompaniyalarning yangi avtomobillari
 🎵 Musiqa, 🍢 taomlar, ☕ ichimliklar, 🏕 dam olish zonasi
@@ -111,12 +111,6 @@ def skip_kb() -> ReplyKeyboardMarkup:
         resize_keyboard=True
     )
 
-# Inline buttons for /mydata
-def edit_inline_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        [InlineKeyboardButton(text="✏️ Изменить / Tahrirlash", callback_data="edit_start")]
-    ]])
-
 # ============== DB helpers ==============
 CREATE_SQL = """
 CREATE TABLE IF NOT EXISTS registrations (
@@ -148,24 +142,19 @@ async def insert_registration(tg_id: int, name: str, car: str, phone: str, peopl
 async def get_registration(tg_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT id,tg_id,name,car,phone,people,created_at FROM registrations WHERE tg_id=?", (tg_id,)) as cur:
-            row = await cur.fetchone()
-            return row
+            return await cur.fetchone()
 
 async def update_registration(tg_id: int, name: str = None, car: str = None, phone: str = None, people: int = None):
     async with aiosqlite.connect(DB_PATH) as db:
         fields, params = [], []
         if name is not None:
-            fields.append("name=?")
-            params.append(name.strip())
+            fields.append("name=?"); params.append(name.strip())
         if car is not None:
-            fields.append("car=?")
-            params.append(car.strip())
+            fields.append("car=?"); params.append(car.strip())
         if phone is not None:
-            fields.append("phone=?")
-            params.append(phone.strip())
+            fields.append("phone=?"); params.append(phone.strip())
         if people is not None:
-            fields.append("people=?")
-            params.append(int(people))
+            fields.append("people=?"); params.append(int(people))
         if not fields:
             return
         params.append(tg_id)
@@ -174,7 +163,6 @@ async def update_registration(tg_id: int, name: str = None, car: str = None, pho
 
 # ============== Validation ==============
 def parse_inline(text: str):
-    # Expected: name, "car", phone, people
     parts = [p.strip() for p in text.split(",")]
     if len(parts) != 4:
         return None
@@ -189,7 +177,8 @@ def parse_inline(text: str):
     ppl = int(digits)
     if not (1 <= ppl <= 50):
         return None
-    car = car.strip('"“”'` ')
+    # SAFELY strip quotes/spaces around car
+    car = car.strip(" '"`“”")
     return name, car, phone, ppl
 
 def phone_valid(phone: str) -> bool:
@@ -243,7 +232,8 @@ async def reg_name(m: types.Message, state: FSMContext):
 
 @router.message(RegForm.car)
 async def reg_car(m: types.Message, state: FSMContext):
-    car = (m.text or "").strip().strip('\"“”\'` ')
+    car = (m.text or "").strip()
+    car = car.strip(" '"`“”")  # FIXED: safe strip of quotes/spaces
     if len(car) < 2:
         return await m.answer('RU: Укажите корректно марку и модель.\nUZ: Brend va modelni to‘g‘ri yozing.')
     await state.update_data(car=car)
@@ -318,6 +308,12 @@ async def cmd_mydata(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Изменить / Tahrirlash", callback_data="edit_start")]])
     await m.answer("Если нужно — можно обновить данные.", reply_markup=kb)
 
+class EditForm(StatesGroup):
+    name = State()
+    car = State()
+    phone = State()
+    people = State()
+
 @router.message(Command("edit"))
 async def cmd_edit(m: types.Message, state: FSMContext):
     row = await get_registration(m.from_user.id)
@@ -355,11 +351,11 @@ async def cb_edit_start(c: types.CallbackQuery, state: FSMContext):
 
 @router.message(EditForm.name)
 async def edit_name(m: types.Message, state: FSMContext):
-    if m.text.strip().lower().startswith(("➡️", "пропустить", "skip")):
-        # keep old
+    txt = (m.text or "").strip().lower()
+    if txt.startswith(("➡️", "пропустить", "skip")):
         pass
     else:
-        if len(m.text.strip()) < 2:
+        if len(txt) < 2:
             return await m.answer("RU: Пожалуйста, введите корректное имя.\nUZ: Iltimos, ismingizni to‘g‘ri kiriting.")
         await state.update_data(name=m.text.strip())
     data = await state.get_data()
@@ -374,10 +370,11 @@ async def edit_name(m: types.Message, state: FSMContext):
 
 @router.message(EditForm.car)
 async def edit_car(m: types.Message, state: FSMContext):
-    if m.text.strip().lower().startswith(("➡️", "пропустить", "skip")):
+    txt = (m.text or "").strip()
+    if txt.lower().startswith(("➡️", "пропустить", "skip")):
         pass
     else:
-        car = m.text.strip().strip('\"“”\'` ')
+        car = txt.strip(" '"`“”")
         if len(car) < 2:
             return await m.answer('RU: Укажите корректно марку и модель.\nUZ: Brend va modelni to‘g‘ri yozing.')
         await state.update_data(car=car)
@@ -393,13 +390,13 @@ async def edit_car(m: types.Message, state: FSMContext):
 
 @router.message(EditForm.phone)
 async def edit_phone(m: types.Message, state: FSMContext):
-    if m.text.strip().lower().startswith(("➡️", "пропустить", "skip")):
+    txt = (m.text or "").strip()
+    if txt.lower().startswith(("➡️", "пропустить", "skip")):
         pass
     else:
-        phone = m.text.strip()
-        if not phone_valid(phone):
+        if not phone_valid(txt):
             return await m.answer("RU: Кажется, номер некорректный. Отправьте ещё раз.\nUZ: Raqam noto‘g‘ri ko‘rinadi. Qayta yuboring.")
-        await state.update_data(phone=phone)
+        await state.update_data(phone=txt)
     data = await state.get_data()
     await state.set_state(EditForm.people)
     await m.answer(
@@ -412,15 +409,15 @@ async def edit_phone(m: types.Message, state: FSMContext):
 
 @router.message(EditForm.people)
 async def edit_people(m: types.Message, state: FSMContext):
-    if m.text.strip().lower().startswith(("➡️", "пропустить", "skip")):
+    txt = (m.text or "").strip()
+    if txt.lower().startswith(("➡️", "пропустить", "skip")):
         pass
     else:
-        n = people_valid(m.text or "")
+        n = people_valid(txt)
         if n is None:
             return await m.answer("RU: Укажите число от 1 до 50.\nUZ: 1 dan 50 gacha bo‘lgan son kiriting.")
         await state.update_data(people=n)
     data = await state.get_data()
-    # persist
     await update_registration(
         tg_id=m.from_user.id,
         name=data.get("name"),
@@ -437,31 +434,6 @@ async def edit_people(m: types.Message, state: FSMContext):
         f"👥 {data['people']}"
     )
     await m.answer(text, parse_mode=ParseMode.HTML, reply_markup=start_kb())
-
-# --------- Fallback: inline one-line message ---------
-def format_reg_text(reg_id, name, car, phone, ppl):
-    return (
-        "✅ <b>Регистрация успешна! / Ro‘yxatdan o‘tish muvaffaqiyatli!</b>\n"
-        f"ID: <b>{reg_id}</b>\n\n"
-        f"👤 {name}\n"
-        f"🚙 {car}\n"
-        f"📞 {phone}\n"
-        f"👥 {ppl}"
-    )
-
-@router.message()
-async def fallback_inline(m: types.Message, state: FSMContext):
-    parsed = parse_inline(m.text or "")
-    if not parsed:
-        return await m.answer(
-            "RU: Нажмите «Зарегистрироваться» или отправьте в формате: <i>Имя, \"Авто\", Телефон, Кол-во</i>\n"
-            "UZ: «Ro‘yxatdan o‘tish» tugmasini bosing yoki mana bunday yuboring: <i>Ism, \"Avto\", Telefon, Son</i>",
-            parse_mode=ParseMode.HTML,
-            reply_markup=start_kb()
-        )
-    name, car, phone, ppl = parsed
-    reg_id = await insert_registration(m.from_user.id, name, car, phone, ppl)
-    await m.answer(format_reg_text(reg_id, name, car, phone, ppl), parse_mode=ParseMode.HTML, reply_markup=start_kb())
 
 # ============== Admin section (export/count) ==============
 admin_router = Router()
