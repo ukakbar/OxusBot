@@ -13,20 +13,25 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 # ================== Config ==================
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 DB_PATH = os.getenv("DB_PATH", "registrations.db")
 
-# Список админов по username (можно через запятую)
+# Админы по username
 ADMINS = ["UkAkbar", "fdimon"]
 
 # ================== Helpers ==================
 def is_admin(message: types.Message) -> bool:
-    """Проверяем, является ли пользователь админом"""
     username = (message.from_user.username or "").lower()
     return username in [a.lower() for a in ADMINS]
+
+def normalize_phone(s: str) -> str:
+    # убираем пробелы/скобки/дефисы, оставляем + и цифры
+    s = (s or "").strip()
+    s = re.sub(r"[^\d+]", "", s)
+    return s
 
 # ================== Texts ==================
 WELCOME_TEXT = """
@@ -77,10 +82,24 @@ INFO_TEXT = """
 
 LOCATION_TEXT = """
 📍 <b>Локация фестиваля / Festival joyi</b>
-Оффроуд «Festival Aydarkul 2025» пройдёт у живописного озера Айдаркуль.
-Hudud: O‘zbekiston, Navoiy viloyati, Aydarkul ko‘li atrofida.
+O‘zbekiston, Navoiy viloyati, Aydarkul ko‘li atrofida.
 
 👇 <a href="https://yandex.ru/navi?rtext=41.331143,69.272065~40.800573,66.970008&rtt=auto">Открыть маршрут в Яндекс.Навигаторе</a>
+"""
+
+PARTICIPATE_TEXT = """
+🏁 <b>Участвуете ли вы в соревнованиях? / Musobaqalarda ishtirok etasizmi?</b>
+
+RU:
+• 25 октября — <b>Jeep Sprint</b> — только для подготовленных автомобилей
+• 26 октября — <b>Jeep Trial</b> — для всех желающих, на любых полноприводных (4x4) автомобилях
+
+UZ:
+• 25 oktabr — <b>Jeep Sprint</b> — faqat tayyorlangan avtomobillar uchun
+• 26 oktabr — <b>Jeep Trial</b> — istalgan 4x4 avtomobillar uchun, hamma qatnasha oladi
+
+RU: Выберите «Да» или «Нет».
+UZ: «Ha» yoki «Yo‘q» ni tanlang.
 """
 
 # ================== FSM ==================
@@ -88,49 +107,49 @@ class RegForm(StatesGroup):
     name = State()
     car = State()
     plate = State()
-    phone = State()
     race = State()
     race_type = State()
+    phone = State()
     payment = State()
     people = State()
 
 # ================== Keyboards ==================
-def start_kb():
+def start_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="🚀 Зарегистрироваться / Ro‘yxatdan o‘tish")],
             [KeyboardButton(text="ℹ️ Инфо / Ma’lumot")],
-            [KeyboardButton(text="📍 Локация / Manzil")]
+            [KeyboardButton(text="📍 Локация / Manzil")],
         ],
         resize_keyboard=True
     )
 
-def yes_no_kb():
+def yes_no_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="✅ Да / Ha")],
-            [KeyboardButton(text="❌ Нет / Yo‘q")]
+            [KeyboardButton(text="❌ Нет / Yo‘q")],
         ],
-        resize_keyboard=True
+        resize_keyboard=True, one_time_keyboard=True
     )
 
-def race_type_kb():
+def race_type_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="🏁 Jeep Sprint")],
-            [KeyboardButton(text="🧗 Jeep Trial")]
+            [KeyboardButton(text="🧗 Jeep Trial")],
         ],
-        resize_keyboard=True
+        resize_keyboard=True, one_time_keyboard=True
     )
 
-def payment_kb():
+def payment_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="💰 Я оплатил(а) / To‘lov qildim")],
             [KeyboardButton(text="⏳ Оплачу позже / Keyin to‘layman")],
-            [KeyboardButton(text="❌ Отмена / Bekor qilish")]
+            [KeyboardButton(text="❌ Отмена / Bekor qilish")],
         ],
-        resize_keyboard=True
+        resize_keyboard=True, one_time_keyboard=True
     )
 
 # ================== Database ==================
@@ -167,11 +186,13 @@ async def insert_registration(tg_id, name, car, plate, phone, race, race_type, p
         except aiosqlite.IntegrityError:
             return False
 
-# ================== Router ==================
+# ================== Routers ==================
 router = Router()
+admin_router = Router()
 
+# ================== Handlers ==================
 @router.message(CommandStart())
-async def start(m: types.Message):
+async def cmd_start(m: types.Message):
     await m.answer(WELCOME_TEXT, parse_mode=ParseMode.HTML, reply_markup=start_kb())
 
 @router.message(F.text == "ℹ️ Инфо / Ma’lumot")
@@ -182,7 +203,7 @@ async def info(m: types.Message):
 async def location(m: types.Message):
     await m.answer(LOCATION_TEXT, parse_mode=ParseMode.HTML, disable_web_page_preview=False)
 
-# ================== Registration ==================
+# ---------- Registration flow ----------
 @router.message(F.text == "🚀 Зарегистрироваться / Ro‘yxatdan o‘tish")
 async def reg_start(m: types.Message, state: FSMContext):
     await state.set_state(RegForm.name)
@@ -190,58 +211,67 @@ async def reg_start(m: types.Message, state: FSMContext):
 
 @router.message(RegForm.name)
 async def reg_name(m: types.Message, state: FSMContext):
-    await state.update_data(name=m.text.strip())
+    name = (m.text or "").strip()
+    if len(name) < 2:
+        return await m.answer("RU: Введите корректное имя.\nUZ: To‘g‘ri ism kiriting.")
+    await state.update_data(name=name)
     await state.set_state(RegForm.car)
     await m.answer("🚙 RU: Напишите марку и модель вашего автомобиля.\nUZ: Avtomobil brendi va modelini yozing.")
 
 @router.message(RegForm.car)
 async def reg_car(m: types.Message, state: FSMContext):
-    await state.update_data(car=m.text.strip())
+    car = (m.text or "").strip()
+    if len(car) < 2:
+        return await m.answer("RU: Укажите марку и модель корректно.\nUZ: Brend va modelni to‘g‘ri yozing.")
+    await state.update_data(car=car)
     await state.set_state(RegForm.plate)
-    await m.answer("🔢 RU: Укажите госномер автомобиля (например 01A777AA).\nUZ: Avtomobil davlat raqamini yozing (misol: 01A777AA).")
+    await m.answer("🔢 RU: Укажите госномер автомобиля (например 01A777AA, KZ 321ABC05).\nUZ: Avtomobil davlat raqamini yozing (misol: 01A777AA, KZ 321ABC05).")
 
 @router.message(RegForm.plate)
 async def reg_plate(m: types.Message, state: FSMContext):
-    await state.update_data(plate=m.text.strip().upper())
+    plate = (m.text or "").strip().upper()
+    if len(plate) < 4:
+        return await m.answer("RU: Введите корректный госномер (минимум 4 символа).\nUZ: To‘g‘ri davlat raqamini kiriting (kamida 4 belgi).")
+    await state.update_data(plate=plate)
     await state.set_state(RegForm.race)
-    PARTICIPATE_TEXT = """
-🏁 <b>Участвуете ли вы в соревнованиях? / Musobaqalarda ishtirok etasizmi?</b>
-
-RU:
-• 25 октября — <b>Jeep Sprint</b> — только для подготовленных автомобилей
-• 26 октября — <b>Jeep Trial</b> — для всех желающих, на любых полноприводных (4x4) автомобилях
-
-UZ:
-• 25 oktabr — <b>Jeep Sprint</b> — faqat tayyorlangan avtomobillar uchun
-• 26 oktabr — <b>Jeep Trial</b> — istalgan 4x4 avtomobillar uchun, hamma qatnasha oladi
-
-RU: Выберите «Да» или «Нет».
-UZ: «Ha» yoki «Yo‘q» ni tanlang.
-"""
-
-await m.answer(PARTICIPATE_TEXT, parse_mode=ParseMode.HTML, reply_markup=yes_no_kb())
-
+    await m.answer(PARTICIPATE_TEXT, parse_mode=ParseMode.HTML, reply_markup=yes_no_kb())
 
 @router.message(RegForm.race)
 async def reg_race(m: types.Message, state: FSMContext):
-    if "да" in m.text.lower() or "ha" in m.text.lower():
+    t = (m.text or "").lower()
+    if "да" in t or "ha" in t:
         await state.update_data(race="yes")
         await state.set_state(RegForm.race_type)
-        await m.answer("Tanlang / Выберите дисциплину:", reply_markup=race_type_kb())
-    else:
+        return await m.answer(
+            "Tanlang / Выберите:\n"
+            "🏁 Jeep Sprint — 25.10 (faqat tayyorlangan avtomobillar uchun / подготовленные авто)\n"
+            "🧗 Jeep Trial — 26.10 (istalgan 4x4 uchun / для всех желающих 4x4)",
+            reply_markup=race_type_kb()
+        )
+    elif "нет" in t or "yo‘q" in t or "yoq" in t or "yok" in t:
         await state.update_data(race="no", race_type="-")
         await state.set_state(RegForm.phone)
-        await m.answer("📞 RU: Укажите номер телефона (+998...)\nUZ: Telefon raqamingizni yozing (+998... bilan).")
+        return await m.answer("📞 RU: Укажите номер телефона (+код страны...)\nUZ: Telefon raqamingizni yozing (+mamlakat kodi bilan...).")
+    else:
+        return await m.answer("RU: Нажмите кнопку «Да» или «Нет».\nUZ: «Ha» yoki «Yo‘q» tugmasini bosing.", reply_markup=yes_no_kb())
 
 @router.message(RegForm.race_type)
 async def reg_race_type(m: types.Message, state: FSMContext):
-    await state.update_data(race_type=m.text.strip())
+    t = (m.text or "").lower()
+    if "sprint" in t:
+        await state.update_data(race_type="Jeep Sprint")
+    elif "trial" in t:
+        await state.update_data(race_type="Jeep Trial")
+    else:
+        return await m.answer("Tanlang / Выберите: «🏁 Jeep Sprint» yoki «🧗 Jeep Trial».", reply_markup=race_type_kb())
     await state.set_state(RegForm.phone)
-    await m.answer("📞 RU: Укажите номер телефона (+998...)\nUZ: Telefon raqamingizni yozing (+998... bilan).")
+    await m.answer("📞 RU: Укажите номер телефона (+код страны...)\nUZ: Telefon raqamingizni yozing (+mamlakat kodi bilan...).")
 
 @router.message(RegForm.phone)
 async def reg_phone(m: types.Message, state: FSMContext):
-    phone = re.sub(r"\s+", "", m.text)
+    phone = normalize_phone(m.text)
+    if not phone.startswith("+") or not (7 <= len(re.sub(r"\D", "", phone)) <= 15):
+        return await m.answer("RU: Кажется, номер некорректный. Отправьте ещё раз (+код страны...)\nUZ: Raqam noto‘g‘ri. +mamlakat kodi bilan yuboring.")
     await state.update_data(phone=phone)
     await state.set_state(RegForm.payment)
     await m.answer(
@@ -255,64 +285,143 @@ async def reg_phone(m: types.Message, state: FSMContext):
 
 @router.message(RegForm.payment)
 async def reg_payment(m: types.Message, state: FSMContext):
-    if "оплачу" in m.text.lower() or "keyin" in m.text.lower():
+    t = (m.text or "").lower()
+    if "оплачу" in t or "keyin" in t:
         await state.update_data(payment="later")
-    elif "оплат" in m.text.lower() or "to‘lov" in m.text.lower():
+    elif "оплат" in t or "to‘lov" in t or "tolov" in t:
         await state.update_data(payment="paid")
+    elif "отмена" in t or "bekor" in t:
+        await state.clear()
+        return await m.answer("Bekor qilindi / Отменено.", reply_markup=start_kb())
     else:
         await state.update_data(payment="-")
     await state.set_state(RegForm.people)
-    await m.answer("👥 RU: Сколько человек будет в автомобиле (включая водителя)?\nUZ: Mashinada (haydovchini qo‘shib) nechta odam bo‘ladi?")
+    await m.answer("👥 RU: Сколько человек будет в автомобиле (включая водителя)? Только число.\nUZ: Mashinada (haydovchini qo‘shib) nechta odam? Faqat raqam yozing.")
 
 @router.message(RegForm.people)
 async def reg_people(m: types.Message, state: FSMContext):
     data = await state.get_data()
-    people = re.sub(r"\D", "", m.text)
-    if not people:
-        return await m.answer("❗️RU: Введите только число.\nUZ: Faqat raqam yozing.")
+    digits = re.sub(r"\D", "", (m.text or ""))
+    if not digits:
+        return await m.answer("RU: Введите только число.\nUZ: Faqat raqam yozing.")
+    people = int(digits)
+
     ok = await insert_registration(
-        m.from_user.id, data["name"], data["car"], data["plate"], data["phone"],
-        data["race"], data.get("race_type", "-"), data["payment"], int(people)
+        tg_id=m.from_user.id,
+        name=data["name"],
+        car=data["car"],
+        plate=data["plate"],
+        phone=data["phone"],
+        race=data.get("race", "no"),
+        race_type=data.get("race_type", "-"),
+        payment=data.get("payment", "-"),
+        people=people
     )
     if not ok:
         return await m.answer("❗️ Регистрация с таким номером телефона или госномером уже существует.\nAgar ma’lumotni o‘zgartirmoqchi bo‘lsangiz — @UkAkbar bilan bog‘laning.")
+
+    # Итог
+    race_line = data["race_type"] if data.get("race") == "yes" else "Нет"
     await m.answer(
-        f"✅ <b>Регистрация успешна!</b>\n\n"
-        f"👤 {data['name']}\n🚙 {data['car']}\n🔢 {data['plate']}\n📞 {data['phone']}\n"
-        f"🏁 Участие: {data['race_type'] if data['race']=='yes' else 'Нет'}\n💰 Оплата: {data['payment']}\n👥 Людей: {people}",
+        "✅ <b>Регистрация успешна!</b>\n\n"
+        f"👤 {data['name']}\n"
+        f"🚙 {data['car']}  •  {data['plate']}\n"
+        f"📞 {data['phone']}\n"
+        f"🏁 Участие: {race_line}\n"
+        f"💰 Оплата: {data.get('payment','-')}\n"
+        f"👥 Людей: {people}",
         parse_mode=ParseMode.HTML
     )
+    # Доп-опция: проживание
     await m.answer(
-        "🏡 <b>Проживание / Turar joy (ixtiyoriy):</b>\n🏠 Коттедж 2-местный — 1 500 000 сум\n🏡 Коттедж 3-местный — 2 000 000 сум\n⛺️ Юрта (3+ человек) — 800 000 сум\nBron qilish / Бронь: shaxsiy xabar — @UkAkbar",
+        "🏡 <b>Проживание / Turar joy (ixtiyoriy):</b>\n"
+        "🏠 Коттедж 2-местный — 1 500 000 сум\n"
+        "🏡 Коттедж 3-местный — 2 000 000 сум\n"
+        "⛺️ Юрта (3+ человек) — 800 000 сум\n"
+        "Bron qilish / Бронь: shaxsiy xabar — @UkAkbar",
         parse_mode=ParseMode.HTML,
         reply_markup=start_kb()
     )
     await state.clear()
 
-# ================== Admin export ==================
-admin_router = Router()
+# ================== Admin: export ==================
+@admin_router.message(Command("export"))
+async def cmd_export_csv(m: types.Message):
+    if not is_admin(m):
+        return await m.answer("❌ У вас нет доступа.")
+    import csv, io
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "ID","Имя","Автомобиль","Госномер","Телефон","Кол-во",
+        "Участие(Да/Нет)","Дисциплина","Статус оплаты","Дата регистрации (UTC)"
+    ])
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id,name,car,plate,phone,people,race,race_type,payment,created_at "
+            "FROM registrations ORDER BY id"
+        ) as cur:
+            async for rid,name,car,plate,phone,people,race,race_type,payment,created_at in cur:
+                writer.writerow([
+                    rid, name, car, plate, phone, people,
+                    ("Да" if str(race).lower().startswith("y") else "Нет"),
+                    (race_type or "-"),
+                    (payment or "-"),
+                    created_at
+                ])
+    output.seek(0)
+    await m.answer_document(
+        types.BufferedInputFile(output.getvalue().encode("utf-8"),
+                                filename=f"registrations_{datetime.utcnow().date()}.csv")
+    )
 
-@admin_router.message(Command("exportxlsx"))
-async def export_xlsx(m: types.Message):
+@admin_router.message(Command("exportxlsx")))
+async def cmd_export_xlsx(m: types.Message):
     if not is_admin(m):
         return await m.answer("❌ У вас нет доступа.")
     rows = []
     async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT id,name,car,plate,phone,people,race,race_type,payment,created_at FROM registrations ORDER BY id") as cur:
+        async with db.execute(
+            "SELECT id,name,car,plate,phone,people,race,race_type,payment,created_at "
+            "FROM registrations ORDER BY id"
+        ) as cur:
             async for r in cur:
                 rows.append(r)
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Registrations"
-    ws.append(["ID","Имя","Автомобиль","Госномер","Телефон","Кол-во человек","Участие","Дисциплина","Статус оплаты","Дата (UTC)"])
+    ws.append([
+        "ID","Имя","Автомобиль","Госномер","Телефон","Кол-во",
+        "Участие(Да/Нет)","Дисциплина","Статус оплаты","Дата регистрации (UTC)"
+    ])
     for rid,name,car,plate,phone,people,race,race_type,payment,created_at in rows:
-        ws.append([rid,name,car,plate,phone,people,("Да" if str(race).lower().startswith("y") else "Нет"),race_type,payment,created_at])
+        ws.append([
+            rid, name, car, plate, phone, people,
+            ("Да" if str(race).lower().startswith("y") else "Нет"),
+            (race_type or "-"),
+            (payment or "-"),
+            created_at
+        ])
     for col in ws.columns:
-        width = max(len(str(c.value)) if c.value else 0 for c in col)
-        ws.column_dimensions[col[0].column_letter].width = min(width + 2, 40)
-    buf = BytesIO()
-    wb.save(buf); buf.seek(0)
-    await m.answer_document(types.BufferedInputFile(buf.getvalue(), filename=f"registrations_{datetime.utcnow().date()}.xlsx"), caption="Экспорт регистраций (Excel)")
+        width = max(len(str(c.value)) if c.value is not None else 0 for c in col)
+        ws.column_dimensions[col[0].column_letter].width = min(width + 2, 42)
+
+    buf = BytesIO(); wb.save(buf); buf.seek(0)
+    await m.answer_document(
+        types.BufferedInputFile(buf.getvalue(),
+                                filename=f"registrations_{datetime.utcnow().date()}.xlsx"),
+        caption="Экспорт регистраций (Excel)"
+    )
+
+@admin_router.message(Command("count"))
+async def cmd_count(m: types.Message):
+    if not is_admin(m):
+        return await m.answer("❌ У вас нет доступа.")
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT COUNT(*) FROM registrations") as cur:
+            row = await cur.fetchone()
+    await m.answer(f"Всего регистраций: <b>{row[0]}</b>", parse_mode=ParseMode.HTML)
 
 # ================== Runner ==================
 async def main():
