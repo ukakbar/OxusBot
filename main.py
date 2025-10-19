@@ -1,4 +1,4 @@
-#
+# -*- coding: utf-8 -*-
 import asyncio
 import os
 import re
@@ -28,8 +28,8 @@ def is_admin(message: types.Message) -> bool:
     return username in [a.lower() for a in ADMINS]
 
 def normalize_phone(s: str) -> str:
-    # убираем пробелы/скобки/дефисы, оставляем + и цифры
     s = (s or "").strip()
+    # оставить только + и цифры
     s = re.sub(r"[^\d+]", "", s)
     return s
 
@@ -320,7 +320,6 @@ async def reg_people(m: types.Message, state: FSMContext):
     if not ok:
         return await m.answer("❗️ Регистрация с таким номером телефона или госномером уже существует.\nAgar ma’lumotni o‘zgartirmoqchi bo‘lsangiz — @UkAkbar bilan bog‘laning.")
 
-    # Итог
     race_line = data["race_type"] if data.get("race") == "yes" else "Нет"
     await m.answer(
         "✅ <b>Регистрация успешна!</b>\n\n"
@@ -332,7 +331,6 @@ async def reg_people(m: types.Message, state: FSMContext):
         f"👥 Людей: {people}",
         parse_mode=ParseMode.HTML
     )
-    # Доп-опция: проживание
     await m.answer(
         "🏡 <b>Проживание / Turar joy (ixtiyoriy):</b>\n"
         "🏠 Коттедж 2-местный — 1 500 000 сум\n"
@@ -375,7 +373,7 @@ async def cmd_export_csv(m: types.Message):
                                 filename=f"registrations_{datetime.utcnow().date()}.csv")
     )
 
-@admin_router.message(Command("exportxlsx")))
+@admin_router.message(Command("exportxlsx"))
 async def cmd_export_xlsx(m: types.Message):
     if not is_admin(m):
         return await m.answer("❌ У вас нет доступа.")
