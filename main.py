@@ -17,8 +17,16 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 
 # ================== Config ==================
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
 DB_PATH = os.getenv("DB_PATH", "registrations.db")
+
+# Список админов по username (можно через запятую)
+ADMINS = ["UkAkbar", "fdimon"]
+
+# ================== Helpers ==================
+def is_admin(message: types.Message) -> bool:
+    """Проверяем, является ли пользователь админом"""
+    username = (message.from_user.username or "").lower()
+    return username in [a.lower() for a in ADMINS]
 
 # ================== Texts ==================
 WELCOME_TEXT = """
@@ -125,15 +133,6 @@ def payment_kb():
         resize_keyboard=True
     )
 
-def confirm_kb():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="✅ Завершить / Tugatish")],
-            [KeyboardButton(text="✏️ Исправить / Tahrirlash")]
-        ],
-        resize_keyboard=True
-    )
-
 # ================== Database ==================
 CREATE_SQL = """
 CREATE TABLE IF NOT EXISTS registrations (
@@ -206,8 +205,7 @@ async def reg_plate(m: types.Message, state: FSMContext):
     await state.update_data(plate=m.text.strip().upper())
     await state.set_state(RegForm.race)
     await m.answer(
-        "🏁 RU: Участвуете ли вы в соревнованиях?\n"
-        "UZ: Musobaqalarda ishtirok etasizmi?\n\n"
+        "🏁 RU: Участвуете ли вы в соревнованиях?\nUZ: Musobaqalarda ishtirok etasizmi?\n\n"
         "📋 Jeep Sprint — 25 октября (подготовленные авто)\n"
         "📋 Jeep Trial — 26 октября (все желающие 4x4)",
         reply_markup=yes_no_kb()
@@ -215,8 +213,7 @@ async def reg_plate(m: types.Message, state: FSMContext):
 
 @router.message(RegForm.race)
 async def reg_race(m: types.Message, state: FSMContext):
-    text = m.text.lower()
-    if "да" in text or "ha" in text:
+    if "да" in m.text.lower() or "ha" in m.text.lower():
         await state.update_data(race="yes")
         await state.set_state(RegForm.race_type)
         await m.answer("Tanlang / Выберите дисциплину:", reply_markup=race_type_kb())
@@ -247,10 +244,9 @@ async def reg_phone(m: types.Message, state: FSMContext):
 
 @router.message(RegForm.payment)
 async def reg_payment(m: types.Message, state: FSMContext):
-    text = m.text.lower()
-    if "оплачу" in text or "keyin" in text:
+    if "оплачу" in m.text.lower() or "keyin" in m.text.lower():
         await state.update_data(payment="later")
-    elif "оплат" in text or "to‘lov" in text:
+    elif "оплат" in m.text.lower() or "to‘lov" in m.text.lower():
         await state.update_data(payment="paid")
     else:
         await state.update_data(payment="-")
@@ -264,31 +260,48 @@ async def reg_people(m: types.Message, state: FSMContext):
     if not people:
         return await m.answer("❗️RU: Введите только число.\nUZ: Faqat raqam yozing.")
     ok = await insert_registration(
-        tg_id=m.from_user.id,
-        name=data["name"], car=data["car"], plate=data["plate"], phone=data["phone"],
-        race=data["race"], race_type=data.get("race_type", "-"), payment=data["payment"],
-        people=int(people)
+        m.from_user.id, data["name"], data["car"], data["plate"], data["phone"],
+        data["race"], data.get("race_type", "-"), data["payment"], int(people)
     )
     if not ok:
-        return await m.answer("❗️ Регистрация с таким номером телефона или госномером уже существует.\n"
-                              "Agar ma’lumotni o‘zgartirmoqchi bo‘lsangiz — @UkAkbar bilan bog‘laning.")
+        return await m.answer("❗️ Регистрация с таким номером телефона или госномером уже существует.\nAgar ma’lumotni o‘zgartirmoqchi bo‘lsangiz — @UkAkbar bilan bog‘laning.")
     await m.answer(
         f"✅ <b>Регистрация успешна!</b>\n\n"
         f"👤 {data['name']}\n🚙 {data['car']}\n🔢 {data['plate']}\n📞 {data['phone']}\n"
-        f"🏁 Участие: {data['race_type'] if data['race']=='yes' else 'Нет'}\n💰 Оплата: {data['payment']}\n"
-        f"👥 Людей: {people}",
+        f"🏁 Участие: {data['race_type'] if data['race']=='yes' else 'Нет'}\n💰 Оплата: {data['payment']}\n👥 Людей: {people}",
         parse_mode=ParseMode.HTML
     )
     await m.answer(
-        "🏡 <b>Проживание / Turar joy (ixtiyoriy):</b>\n"
-        "🏠 Коттедж 2-местный — 1 500 000 сум\n"
-        "🏡 Коттедж 3-местный — 2 000 000 сум\n"
-        "⛺️ Юрта (3+ человек) — 800 000 сум\n"
-        "Bron qilish / Бронь: shaxsiy xabar — @UkAkbar",
+        "🏡 <b>Проживание / Turar joy (ixtiyoriy):</b>\n🏠 Коттедж 2-местный — 1 500 000 сум\n🏡 Коттедж 3-местный — 2 000 000 сум\n⛺️ Юрта (3+ человек) — 800 000 сум\nBron qilish / Бронь: shaxsiy xabar — @UkAkbar",
         parse_mode=ParseMode.HTML,
         reply_markup=start_kb()
     )
     await state.clear()
+
+# ================== Admin export ==================
+admin_router = Router()
+
+@admin_router.message(Command("exportxlsx"))
+async def export_xlsx(m: types.Message):
+    if not is_admin(m):
+        return await m.answer("❌ У вас нет доступа.")
+    rows = []
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT id,name,car,plate,phone,people,race,race_type,payment,created_at FROM registrations ORDER BY id") as cur:
+            async for r in cur:
+                rows.append(r)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Registrations"
+    ws.append(["ID","Имя","Автомобиль","Госномер","Телефон","Кол-во человек","Участие","Дисциплина","Статус оплаты","Дата (UTC)"])
+    for rid,name,car,plate,phone,people,race,race_type,payment,created_at in rows:
+        ws.append([rid,name,car,plate,phone,people,("Да" if str(race).lower().startswith("y") else "Нет"),race_type,payment,created_at])
+    for col in ws.columns:
+        width = max(len(str(c.value)) if c.value else 0 for c in col)
+        ws.column_dimensions[col[0].column_letter].width = min(width + 2, 40)
+    buf = BytesIO()
+    wb.save(buf); buf.seek(0)
+    await m.answer_document(types.BufferedInputFile(buf.getvalue(), filename=f"registrations_{datetime.utcnow().date()}.xlsx"), caption="Экспорт регистраций (Excel)")
 
 # ================== Runner ==================
 async def main():
@@ -296,6 +309,7 @@ async def main():
     bot = Bot(TOKEN, parse_mode=ParseMode.HTML)
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(router)
+    dp.include_router(admin_router)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
