@@ -204,12 +204,23 @@ async def reg_car(m: types.Message, state: FSMContext):
 async def reg_plate(m: types.Message, state: FSMContext):
     await state.update_data(plate=m.text.strip().upper())
     await state.set_state(RegForm.race)
-    await m.answer(
-        "🏁 RU: Участвуете ли вы в соревнованиях?\nUZ: Musobaqalarda ishtirok etasizmi?\n\n"
-        "📋 Jeep Sprint — 25 октября (подготовленные авто)\n"
-        "📋 Jeep Trial — 26 октября (все желающие 4x4)",
-        reply_markup=yes_no_kb()
-    )
+    PARTICIPATE_TEXT = """
+🏁 <b>Участвуете ли вы в соревнованиях? / Musobaqalarda ishtirok etasizmi?</b>
+
+RU:
+• 25 октября — <b>Jeep Sprint</b> — только для подготовленных автомобилей
+• 26 октября — <b>Jeep Trial</b> — для всех желающих, на любых полноприводных (4x4) автомобилях
+
+UZ:
+• 25 oktabr — <b>Jeep Sprint</b> — faqat tayyorlangan avtomobillar uchun
+• 26 oktabr — <b>Jeep Trial</b> — istalgan 4x4 avtomobillar uchun, hamma qatnasha oladi
+
+RU: Выберите «Да» или «Нет».
+UZ: «Ha» yoki «Yo‘q» ni tanlang.
+"""
+
+await m.answer(PARTICIPATE_TEXT, parse_mode=ParseMode.HTML, reply_markup=yes_no_kb())
+
 
 @router.message(RegForm.race)
 async def reg_race(m: types.Message, state: FSMContext):
